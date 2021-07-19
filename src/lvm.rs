@@ -1,6 +1,12 @@
 use std::error::Error;
 use std::process::Command;
 
+pub struct CreateReplicaRequest {
+    pub uuid: std::string::String,
+    pub pool: std::string::String,
+    pub size: u64,
+}
+
 #[derive(Debug)]
 pub struct PoolCreateReq {
     pub name: String,
@@ -52,8 +58,8 @@ fn remove_vg() {
     todo!()
 }
 
-fn create_lvm_vol() {
-    todo!()
+fn create_lvm_vol(request: CreateReplicaRequest) {
+    todo!(lvcreate from the specified pool)
 }
 
 fn remove_lvm_vol() {
