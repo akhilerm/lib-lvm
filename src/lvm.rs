@@ -16,6 +16,20 @@ pub struct PoolCreateReq {
 }
 
 #[derive(Debug)]
+pub struct CreateReplicaRequest {
+    /// uuid of the replica
+    pub uuid: String,
+    /// name of the pool
+    pub pool: String,
+    /// size of the replica in bytes
+    pub size: u64,
+    // TODO currently not honoured
+    pub thin: bool,
+    /// protocol to expose the replica over
+    pub share: i32,
+}
+
+#[derive(Debug)]
 pub struct Pool {
     pub name: String,
     pub devices: Vec<String>,
@@ -23,8 +37,25 @@ pub struct Pool {
     pub used: u64,
 }
 
-pub(crate) fn create_vg(req: PoolCreateReq) -> Result<Pool, Error> {
 
+#[derive(Debug)]
+pub struct Replica {
+    pub uuid: String,
+    /// name of the pool
+    pub pool: String,
+    pub thin: bool,
+    /// size of the replica in bytes
+    pub size: u64,
+    /// protocol used for exposing the replica
+    pub share: i32,
+    /// uri usable by nexus to access it
+    pub uri: String,
+}
+
+const LVCREATE_COMMAND: &str = "lvcreate";
+
+pub(crate) fn create_vg(req: PoolCreateReq) -> Result<Pool, Error> {
+    let pool_name = req.name.as_str();
     let output = Command::new("pvcreate")
         .args(&req.devices)
         .output()
@@ -219,14 +250,41 @@ pub(crate) fn remove_vg(name: String) -> Result<(), Error> {
     Ok(())
 }
 
-pub struct CreateReplicaRequest {
-    pub uuid: std::string::String,
-    pub pool: std::string::String,
-    pub size: u64,
-}
+pub(crate) fn create_lvm_vol(req: CreateReplicaRequest) -> Result<Replica, Error> {
+    let vol_name =  req.uuid.as_str();
+    let vg_name = req.pool.as_str();
+    let mut size = req.size.to_string();
+    // need to append the units as bytes
+    size.push_str("b");
 
-fn create_lvm_vol(request: CreateReplicaRequest) {
-    todo!("lvcreate from the specified pool")
+    let output = Command::new(LVCREATE_COMMAND)
+        .args(&["-L", size.as_str()])
+        .args(&["-n", vol_name])
+        .arg(vg_name)
+        .output()
+        .expect("failed to execute lvcreate");
+
+    if !output.status.success() {
+        let msg = match std::str::from_utf8(output.stderr.as_slice()){
+            Ok(s) => s,
+            Err(_) => "failed to execute lvcreate",
+        };
+        return Err(Error::FailedExec{err: msg.to_string()})
+    }
+
+    let mut uri = "/dev/".to_owned();
+    uri.push_str(vg_name);
+    uri.push_str("/");
+    uri.push_str(vol_name);
+
+    Ok(Replica{
+        uuid: req.uuid,
+        pool: req.pool,
+        thin: false,
+        size: req.size,
+        share: 0,
+        uri,
+    })
 }
 
 fn remove_lvm_vol() {

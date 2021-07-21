@@ -6,6 +6,7 @@ extern crate serde_derive;
 
 use snafu::{Snafu};
 use clap::{App, Arg, ArgMatches};
+use crate::lvm::{create_lvm_vol, CreateReplicaRequest};
 
 pub mod lvm;
 
@@ -61,6 +62,28 @@ fn main() {
             App::new("listvg")
             .about("List volume group")
         )
+        .subcommand(
+            App::new("lvcreate")
+            .about("create an LVM volume")
+            .arg(
+                Arg::with_name("vgname")
+                    .required(true)
+                    .index(1)
+                    .help("volume group name")
+            )
+            .arg(
+                Arg::with_name("lvname")
+                    .required(true)
+                    .index(2)
+                    .help("name of the lvm volume")
+            )
+            .arg(
+                Arg::with_name("size")
+                    .required(true)
+                    .index(3)
+                    .help("size of the volume")
+            )
+        )
         .get_matches();
 
     let _status = match matches.subcommand() {
@@ -80,6 +103,10 @@ fn main() {
             let pools = lvm::list_vg();
             println!("{:#?}", pools)
         },
+        ("lvcreate", Some(args)) => {
+            let replica = lv_create(args);
+            println!("{:#?}", replica)
+        }
         _ => panic!("Command not found"),
         
     };
@@ -134,4 +161,38 @@ fn remove_vg(
         .to_owned();
     lvm::remove_vg(name)?;
     Ok(())
+}
+
+fn lv_create(
+    matches: &ArgMatches<'_>,
+) -> Result<lvm::Replica, Box<dyn std::error::Error>> {
+    let pool = matches
+        .value_of("vgname")
+        .ok_or_else(|| Error::MissingValue {
+            field: "vgname".to_string(),
+        })?
+        .to_owned();
+    let volume = matches
+        .value_of("lvname")
+        .ok_or_else(|| Error::MissingValue {
+            field: "lvname".to_string(),
+        })?
+        .to_owned();
+    let size = matches
+        .value_of("size")
+        .ok_or_else(|| Error::MissingValue {
+            field: "size".to_string(),
+        })?
+        .to_owned()
+        .parse::<u64>()
+        .expect("failed to parse size");
+    let mut req = CreateReplicaRequest{
+        uuid: volume,
+        pool,
+        size,
+        thin: false,
+        share: 0
+    };
+    let volume = lvm::create_lvm_vol(req)?;
+    Ok(volume)
 }
