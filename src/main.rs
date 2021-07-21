@@ -1,4 +1,8 @@
-use lvm::{Pool, PoolCreateReq};
+use lvm::{PoolCreateReq};
+
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 
 use snafu::{Snafu};
 use clap::{App, Arg, ArgMatches};
@@ -16,7 +20,8 @@ fn main() {
     let matches = App::new("lvm-lib")
         .version("0.1")
         .about("lvm commands to create pools and volumes")
-        .subcommand(App::new("vgcreate")
+        .subcommand(
+      App::new("vgcreate")
             .about("Create volume group")
             .arg(
                 Arg::with_name("name")
@@ -32,12 +37,48 @@ fn main() {
                     .help("Disk device files"),
             )
         )
+        .subcommand(
+            App::new("getvg")
+            .about("Get a volume group")
+            .arg(
+                Arg::with_name("name")
+                    .required(true)
+                    .index(1)
+                    .help("Volume group name"),
+            )
+        )
+        .subcommand(
+            App::new("removevg")
+            .about("Delete a volume group")
+            .arg(
+                Arg::with_name("name")
+                    .required(true)
+                    .index(1)
+                    .help("Volume group name"),
+            )
+        )
+        .subcommand(
+            App::new("listvg")
+            .about("List volume group")
+        )
         .get_matches();
 
-    let status = match matches.subcommand() {
+    let _status = match matches.subcommand() {
         ("vgcreate", Some(args)) => {
-            let pool = create(args);
+            let pool = vg_create(args);
             println!("{:#?}", pool)
+        },
+        ("getvg", Some(args)) => {
+            let pool = get_vg(args);
+            println!("{:#?}", pool)
+        },
+        ("removevg", Some(args)) => {
+            let pool = remove_vg(args);
+            println!("{:#?}", pool)
+        },
+        ("listvg", Some(args)) => {
+            let pools = lvm::list_vg();
+            println!("{:#?}", pools)
         },
         _ => panic!("Command not found"),
         
@@ -45,7 +86,7 @@ fn main() {
 
 }
 
-fn create(
+fn vg_create(
     matches: &ArgMatches<'_>,
 ) -> Result<lvm::Pool, Box<dyn std::error::Error>> {
     let name = matches
@@ -61,10 +102,36 @@ fn create(
         })?
         .map(|dev| dev.to_owned())
         .collect();
-    let mut req = PoolCreateReq{
+    let req = PoolCreateReq{
             name: name,
             devices: disks,
         };
     let pool = lvm::create_vg(req)?;
     Ok(pool)
+}
+
+fn get_vg(
+    matches: &ArgMatches<'_>,
+) -> Result<lvm::Pool, Box<dyn std::error::Error>> {
+    let name = matches
+        .value_of("name")
+        .ok_or_else(|| Error::MissingValue {
+            field: "name".to_string(),
+        })?
+        .to_owned();
+    let pool = lvm::get_vg(name)?;
+    Ok(pool)
+}
+
+fn remove_vg(
+    matches: &ArgMatches<'_>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let name = matches
+        .value_of("name")
+        .ok_or_else(|| Error::MissingValue {
+            field: "name".to_string(),
+        })?
+        .to_owned();
+    lvm::remove_vg(name)?;
+    Ok(())
 }
