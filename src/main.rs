@@ -84,6 +84,30 @@ fn main() {
                     .help("size of the volume")
             )
         )
+        .subcommand(
+            App::new("getlv")
+                .about("get an lvm volume")
+                .arg(
+                    Arg::with_name("name")
+                        .required(true)
+                        .index(1)
+                        .help("name of the logical volume")
+                )
+        )
+        .subcommand(
+            App::new("listlv")
+                .about("list all the logical volumes")
+        )
+        .subcommand(
+            App::new("removelv")
+                .about("remove a logical volume")
+                .arg(
+                    Arg::with_name("name")
+                        .required(true)
+                        .index(1)
+                        .help("name of the volume to be removed")
+                )
+        )
         .get_matches();
 
     let _status = match matches.subcommand() {
@@ -105,6 +129,18 @@ fn main() {
         },
         ("lvcreate", Some(args)) => {
             let replica = lv_create(args);
+            println!("{:#?}", replica)
+        },
+        ("getlv", Some(args)) => {
+            let replica = lv_get(args);
+            println!("{:#?}", replica)
+        },
+        ("listlv", Some(args)) => {
+            let replicas = lvm::list_lvm_vol();
+            println!("{:#?}", replicas)
+        },
+        ("removelv", Some(args)) => {
+            let replica = remove_lv(args);
             println!("{:#?}", replica)
         }
         _ => panic!("Command not found"),
@@ -195,4 +231,33 @@ fn lv_create(
     };
     let volume = lvm::create_lvm_vol(req)?;
     Ok(volume)
+}
+
+fn lv_get(
+    matches: &ArgMatches<'_>,
+) -> Result<lvm::Replica, Box<dyn std::error::Error>> {
+    let name = matches
+        .value_of("name")
+        .ok_or_else(|| Error::MissingValue {
+            field: "name".to_string(),
+        })?
+        .to_owned();
+    let replica = lvm::get_lvm_vol(name)?;
+    Ok(replica)
+}
+
+fn remove_lv(
+    matches: &ArgMatches<'_>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let name = matches
+        .value_of("name")
+        .ok_or_else(|| Error::MissingValue {
+            field: "name".to_string()
+        })?
+        .to_owned();
+    let req = lvm::DestroyReplicaRequest {
+        uuid: name
+    };
+    let replica = lvm::remove_lvm_vol(req)?;
+    Ok(())
 }
